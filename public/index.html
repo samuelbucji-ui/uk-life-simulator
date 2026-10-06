@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UK Life Simulator</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f3ead8;--ink:#1d2a4d;--red:#c8102e;--card:#fffaf0;--line:#d8cdb4}
+:root[data-theme="dark"]{--bg:#141b30;--ink:#f3ead8;--card:#1f2847;--line:#33406b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141b30;--ink:#f3ead8;--card:#1f2847;--line:#33406b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,"Times New Roman",serif;display:flex;justify-content:center}
+#app{width:100%;max-width:480px;padding:14px}
+h1{font-size:24px;margin:6px 0 2px}
+.card{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:14px;margin:10px 0}
+.sub{opacity:.75;font-size:14px;margin:0 0 8px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:14px}
+.bar{height:9px;background:var(--line);border-radius:5px;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;background:var(--red);transition:width .4s}
+.big{font-size:17px;font-weight:bold}
+.days{display:flex;gap:4px;margin-bottom:8px}
+.days span{flex:1;text-align:center;font-size:12px;padding:3px 0;border-radius:6px;background:var(--line)}
+.days span.on{background:var(--red);color:#fff;font-weight:bold}
+button{display:block;width:100%;margin:8px 0 0;padding:12px;font:16px Georgia,serif;text-align:left;background:var(--bg);color:var(--ink);border:2px solid var(--ink);border-radius:10px}
+button:active{background:var(--red);color:#fff}
+button.pri{background:var(--red);color:#fff;text-align:center;font-weight:bold;border-color:var(--red)}
+.fx{font-size:13px;opacity:.8;margin-top:6px}
+</style>
+</head>
+<body><div id="app"></div>
+<script>
+const $=document.getElementById('app');
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const SLOTS=['🌅 Morning','☀️ Daytime','🌆 Evening','🌙 Night'];
+const JOBS={Office:{e:'💻',wage:105,rent:150,d:'Desk, meetings, endless emails'},Retail:{e:'🛍️',wage:80,rent:120,d:'High street, customer chaos'},Student:{e:'📚',wage:35,rent:100,d:'Part-time shifts, loans, lectures'},Nurse:{e:'🩺',wage:115,rent:140,d:'NHS heroics, long shifts'},Builder:{e:'🧱',wage:110,rent:130,d:'Hi-vis, bacon rolls, early starts'},Driver:{e:'🛵',wage:90,rent:120,d:'Deliveries, parking, rain'}};
+// [emoji,title,text,[[label,{m,e,j},result]]]
+const P={
+morn:[
+['⏰','Alarm goes off','It\'s dark, it\'s damp, the duvet is warm.',[['Get up now',{e:-3,j:-2,m:0},'Virtuous. Slightly grumpy.'],['Snooze x3',{e:5,j:2},'Lovely. Now you\'re rushing.'],['Stay in bed 1 more hour',{e:9,j:4,m:-8},'Late! A sneaky taxi cost you.']]],
+['🍳','Breakfast','Kettle on. What are you having?',[['Beans on toast',{m:-2,e:6,j:3},'Classic. Cheap. Hearty.'],['Greggs sausage roll',{m:-3,e:4,j:5},'Flaky bliss.'],['Skip it, grab tea',{m:-1,e:-2,j:-1},'Rumbling tummy by 10am.']]],
+['🌧️','Weather check','Forecast: rain. Also sun. Also wind.',[['Wear a big coat',{e:-1,j:1},'Prepared. Sweaty on the bus.'],['Take a brolly',{m:-6,e:0,j:2},'Lost it by lunch.'],['Risk it',{j:-4,e:-3},'Drenched. Of course.']]],
+['🥣','Porridge or cereal?','Weetabix is calling your name.',[['Porridge with honey',{m:-1,e:7,j:3},'Warming. Wholesome.'],['Cereal',{m:-1,e:4,j:2},'Quick and crunchy.'],['Leftover pizza',{m:0,e:2,j:5},'No judgement.']]]
+],
+work:[
+['🚌','The commute','Your bus is "5 minutes away" for 15 minutes.',[['Wait it out',{e:-3,j:-3},'Eventually it came. Two at once.'],['Walk instead',{e:-6,j:4},'Fresh air, sore feet.'],['Taxi',{m:-18,e:1,j:2},'Costly but civilised.']]],
+['☕','Tea round','A colleague offers to make everyone a brew.',[['Join in, say yes',{m:-1,e:3,j:6},'Teamwork and biscuits.'],['Decline politely',{e:-1,j:-1},'Water instead. Dull.'],['Offer to make the round',{m:-4,e:2,j:8},'Now you\'re the office hero.']]],
+['🥪','Lunch break','The meal deal calls.',[['Meal deal: sarnie, crisps, drink',{m:-4,e:5,j:4},'Reliable. Excellent.'],['Pub lunch',{m:-12,e:3,j:7},'Pie and a pint. Sleepy afternoon.'],['Packed lunch',{m:2,e:4,j:1},'Sensible. Soggy cucumber.']]],
+['📞','Boss moment','Your manager wants "a quick chat".',[['Tell them everything',{e:-4,j:-1},'It was fine! (Was it?)'],['Deflect with banter',{e:-1,j:4},'Charming. Still no promotion.'],['"Sorry, can\'t hear you"',{e:0,j:-3},'The old Wi-Fi excuse.']]],
+['📈','Busy day','Emails pile up like Victorian chimneys.',[['Power through',{e:-8,j:-2},'Done! Shattered.'],['Take a proper break',{e:3,j:2},'Slower, saner.'],['Blame the printer',{e:-2,j:1},'It really was broken.']]]
+],
+wknd:[
+['🏞️','Countryside walk','A muddy path and a pub at the end.',[['Full ramble',{m:-6,e:-7,j:9},'Cows stared. Views were great.'],['Short stroll + pub',{m:-14,e:-2,j:8},'Excellent priorities.'],['Stay home',{e:6,j:-1},'Duvet recharge.']]],
+['⚽','Football','Saturday means matches.',[['Go to the ground',{m:-45,e:-4,j:10},'Passion! Lost though.'],['Watch at the pub',{m:-15,e:-1,j:8},'Roars, groans, chips.'],['Ignore it entirely',{e:3,j:0},'Quiet bliss.']]],
+['🛒','High street / car boot','Everything is a bargain. Allegedly.',[['Browse charity shops',{m:-12,e:-2,j:6},'Found a vintage jumper.'],['Car boot sale',{m:-8,e:-4,j:7},'Haggled for a lamp.'],['Online shop instead',{m:-25,e:0,j:3},'Parcel arrives Tuesday. Maybe.']]],
+['🔨','DIY at B&Q','That shelf won\'t put itself up.',[['Build it yourself',{m:-35,e:-6,j:5},'Slightly wonky. Proud.'],['Hire a handyman',{m:-90,e:2,j:2},'Perfect. Expensive.'],['Leave it',{m:0,e:1,j:-2},'The shelf stays on the floor.']]]
+],
+eve:[
+['🍻','The pub','The pub is open. The pub is always open.',[['Quick one with mates',{m:-14,e:-3,j:9},'Lovely chat. Peanuts.'],['Pub quiz',{m:-10,e:-4,j:10},'Second place. Bitter.'],['Skip the pub',{m:0,e:3,j:-1},'Sensible evening.']]],
+['🍛','Takeaway','Friday night curry? Tuesday night curry?',[['Order a curry',{m:-18,e:2,j:8},'Naan so good.'],['Fish & chips',{m:-10,e:1,j:7},'Seaside spirit.'],['Cook beans & eggs',{m:-3,e:3,j:2},'Cheap, cheerful.']]],
+['📺','Telly time','Soap, quiz show or bake-off?',[['Bake-off binge',{m:0,e:5,j:7},'Soggy bottom drama.'],['Soap opera',{m:0,e:4,j:5},'Everyone shouts.'],['Early night',{m:0,e:10,j:2},'Sleep wins.']]],
+['🛍️','Supermarket dash','Out of milk, bread and everything.',[['Big weekly shop',{m:-40,e:-4,j:3},'Fridge refilled.'],['Corner shop top-up',{m:-12,e:-1,j:2},'Quick, pricey.'],['Order delivery',{m:-35,e:2,j:4},'Driver left it by the bins.']]],
+['🏋️','Fitness?','The gym is warm, brightly lit, and expensive.',[['Go to the gym',{m:-5,e:-7,j:6},'Sweaty triumph.'],['Walk the neighbourhood',{m:0,e:-3,j:4},'Fresh air, nosy houses.'],['Nah',{e:3,j:-1},'Sofa has a magnetic pull.']]]
+],
+night:[
+['🍢','Late-night hunger','The kebab shop glows invitingly.',[['Order a kebab',{m:-9,e:2,j:6},'Mixed grill of regret.'],['Toast and tea',{m:-1,e:4,j:3},'Perfect.'],['Go to bed hungry',{e:6,j:-2},'Stomach complains at 3am.']]],
+['📱','Phone in bed','One more scroll...',[['Scroll for an hour',{e:-6,j:3},'Where did the time go?'],['Read a few pages',{e:6,j:4},'Dozed off nicely.'],['Lights out',{e:10,j:2},'Smart.']]],
+['🍵','Night-time cuppa','A mug of tea at the kitchen counter.',[['Brew and chill',{m:-1,e:6,j:5},'The country runs on this.'],['Cocoa instead',{m:-2,e:8,j:4},'Warm hugs in a cup.'],['Skip the tea',{e:5,j:0},'Odd choice, but alright.']]],
+['🚰','Neighbour noise','Upstairs are throwing a "small gathering".',[['Bang on the ceiling',{e:-4,j:2},'Louder music. Oops.'],['Earplugs',{m:-2,e:5,j:0},'Muffled. Alive.'],['Join the party',{m:-8,e:-6,j:9},'Surprisingly fun.']]]
+]};
+P.eve.push(...[
+['📞','Call your mum','She\'s ringing. Again. Third time today.',[['Pick up, chat for an hour',{e:-3,j:3,s:10},'Heard about every cousin. Lovely.'],['Text back "busy x"',{j:-1,s:-3},'She replied with 14 emojis.'],['Visit with biscuits',{m:-8,e:-5,j:5,s:14},'Hugs and a roast. Winning.']]],
+['💘','Dating app match','Someone with a dog photo wants coffee.',[['Meet for coffee',{m:-9,e:-3,j:6,s:12},'Surprisingly lovely chat.'],['Suggest a pub quiz date',{m:-14,e:-4,j:8,s:14},'Teamwork. Sparks!'],['Swipe away',{e:2,j:-1,s:-2},'Safe. A little lonely.']]],
+['🎂','Mate\'s birthday','Pub back room, sausage rolls, karaoke.',[['Go, bring a gift',{m:-20,e:-5,j:8,s:12},'Sang Mr Brightside. Everyone cried.'],['Pop in for one drink',{m:-8,e:-2,j:4,s:6},'Fair compromise.'],['Send a card',{m:-3,e:3,j:-1,s:-2},'Friend noted the absence.']]],
+['🧑‍🤝‍🧑','Flatmate row','The bins. The washing up. The Wi-Fi password.',[['Hold a house meeting',{e:-4,j:2,s:5},'Rota agreed. Tension eased.'],['Clean it yourself',{e:-6,j:-3,s:-1},'Martyr mode: activated.'],['Bring them a brew',{m:-1,e:1,j:4,s:8},'Peace achieved over tea.']]],
+['💕','Anniversary','Another year of putting up with each other.',[['Fancy dinner',{m:-60,e:-3,j:10,s:15},'Candles, menu, romance.'],['Cosy night in',{m:-12,e:2,j:8,s:12},'Takeaway and telly. Perfect.'],['Forget about it',{j:-8,s:-15},'Sofa for you tonight.']]],
+['🏡','Neighbour chat','Mr Patel is washing his car on the drive.',[['Have a natter',{e:-2,j:5,s:8},'Learned all the council gossip.'],['Wave and smile',{j:1,s:2},'The British way.'],['Pretend to be busy',{e:1,s:-2},'Hid behind the recycling.']]],
+['🖨️','Printer jam','The printer has chosen violence.',[['Fix it yourself',{e:-5,j:3},'Hero of the floor.'],['Call IT',{e:-1,j:-1},'Have you tried turning it off?'],['Walk away slowly',{j:2},'Someone else will deal.']]]
+]);
+P.wknd.push(...[
+['👨‍👩‍👧','Family Sunday lunch','Gran, cousins, and three kinds of potato.',[['Stay all afternoon',{m:-6,e:-3,j:7,s:14},'Stuffed. Heartwarming.'],['Eat and dash',{m:-3,j:3,s:5},'Quick hello. Fine.'],['Skip it',{e:3,j:-4,s:-8},'Gran has "a feeling".']]],
+['👶','Babysit a niece','Sister needs a break. Peppa Pig on repeat.',[['Say yes, enjoy it',{m:5,e:-8,j:5,s:11},'Glitter everywhere. Adorable.'],['Offer an hour only',{e:-3,j:2,s:4},'Fair compromise.'],['Make excuses',{e:2,j:-2,s:-5},'Sister remembers.']]],
+['🤝','Friends reunion','The old group chat suddenly lights up.',[['Organise a meet-up',{m:-18,e:-4,j:8,s:13},'Pints, gossip, photos.'],['Reply with a GIF',{j:1,s:2},'Low effort. Accepted.'],['Mute the chat',{e:2,j:-1,s:-5},'Peace. Lonely peace.']]]
+]);
+P.morn.push(...[
+['🚿','Boiler trouble','No hot water. Brrr.',[['Cold shower',{e:6,j:-4},'Woke up sharply.'],['Kettle wash',{m:-1,e:-1,j:1},'Surprisingly effective.'],['Call a plumber',{m:-70,e:2,j:2},'Fixed! Wallet crushed.']]],
+['📮','Post arrives','A brown envelope. Or a "sorry we missed you" card.',[['Open it nervously',{e:-2,j:-2},'Council tax. Of course.'],['Collect the parcel',{m:-3,e:-3,j:4},'Depot queue. Parcel treasure.'],['Ignore the pile',{e:1,j:-1},'It will wait.']]]
+]);
+P.work.push(...[
+['🎁','Office cake','Someone brought in a Victoria sponge.',[['Take a big slice',{e:4,j:7,s:2},'Crumbs everywhere. Joy.'],['Small, polite slice',{e:2,j:4},'Neat and tidy.'],['Avoid it',{e:-1,j:-2},'Sad salad.']]],
+['🚪','Fire drill','Alarm blares. Everyone shuffles out in drizzle.',[['Queue calmly',{e:-2,j:2},'Orderly. British.'],['Complain loudly',{e:-3,j:-2,s:-2},'Colleagues sigh.'],['Take selfies',{j:5,s:4},'Group chat gold.']]]
+]);
+P.night.push(['⭐','Starry night','The sky is clear for once.',[['Stargaze outside',{e:3,j:7,s:4},'Peaceful. Cold nose.'],['Glance from the window',{e:5,j:3},'Pretty. Warm.'],['Curtains closed',{e:7,j:1},'Cave mode.']]]);
+const BG=[{n:'Council estate, Manchester',e:'🏘️',m:60,en:85,j:60,s:75,rent:-20,d:'Tight budget, tight community'},{n:'Cotswolds village',e:'🌾',m:200,en:75,j:70,s:55,rent:0,d:'Quiet, cosy, far from everything'},{n:'Seaside town',e:'🌊',m:100,en:80,j:75,s:60,rent:-10,d:'Chips, gulls, off-season blues'},{n:'London flat',e:'🏙️',m:120,en:65,j:55,s:50,rent:40,d:'Buzzing and pricey'},{n:'Scottish Highlands',e:'🏔️',m:90,en:80,j:75,s:50,rent:-15,d:'Mountains, midges, quiet'},{n:'Welsh valleys',e:'⛰️',m:70,en:80,j:65,s:70,rent:-20,d:'Choirs, rugby, community'}];
+const W=[{e:'☀️',n:'Sunny',j:3,en:1,h:0},{e:'☁️',n:'Grey',j:0,en:0,h:0},{e:'☁️',n:'Grey',j:0,en:0,h:0},{e:'🌧️',n:'Rainy',j:-3,en:-2,h:0},{e:'🌧️',n:'Rainy',j:-3,en:-2,h:0},{e:'⛈️',n:'Stormy',j:-4,en:-3,h:-1},{e:'❄️',n:'Snowy',j:2,en:-3,h:-1}];
+const rollW=()=>W[Math.floor(Math.random()*W.length)];
+P.morn.push(...[
+['🤧','Got the sniffles','Classic UK cold: sore throat, blocked nose.',[['Power on with Lemsip',{m:-3,e:-4,h:-2,j:-1},'Work done. Tissues wasted.'],['Rest and soup',{m:-4,e:5,h:4,j:1},'Cosy recovery.'],['Pop to the pharmacy',{m:-9,e:2,h:5,j:1},'Sorted. Slightly poorer.']]],
+['🏥','GP phone queue','Ring at 8am sharp and be number 47 in the queue.',[['Hold on forever',{e:-4,h:5,j:-3},'Got a slot next Thursday.'],['Use the NHS app',{e:-1,h:4,j:1},'Surprisingly efficient.'],['Wait and see',{h:-3,j:-1},'Hmm.']]]
+]);
+P.work.push(...[
+['🚆','Train delayed','"Due to leaves on the line..."',[['Wait on the platform',{e:-4,j:-3},'Eventually boarded. Squished.'],['Reroute via bus',{m:-6,e:-3,j:-1},'Scenic and sluggish.'],['Work remotely',{e:1,j:2},'Crisis averted. Pyjamas.']]],
+['🏃','Lunchtime run','The sun is out for once.',[['Run along the canal',{e:-6,h:6,j:5},'Fresh air and swans.'],['Gentle stroll',{e:-1,h:2,j:3},'Pleasant. Pace: pensioner.'],['Eat at desk',{m:-3,e:2,h:-1,j:-1},'Salad mourned.']]],
+['💻','Zoom call','The meeting could have been an email.',[['Keep camera off',{e:-2,j:-1},'Doodled for an hour.'],['Contribute a point',{e:-3,j:2},'Boss nodded, once.'],['Mute and make tea',{e:3,j:2},'Efficient multitasking.']]]
+]);
+P.wknd.push(...[
+['🐕','Dog walk','A park, muddy puddles, and 14 other dogs.',[['Long walk',{e:-6,h:6,j:7,s:5},'Zoomies all round.'],['Quick loop',{e:-2,h:2,j:3,s:2},'Business done.'],['Skip it',{e:3,h:-2,j:-2},'Guilt eyes from the dog.']]],
+['🎶','Music night','A local gig or an open mic.',[['See a live band',{m:-18,e:-4,j:9,s:6},'Loud and brilliant.'],['Open mic',{m:-6,e:-3,j:8,s:6},'Sang off-key, cheered anyway.'],['Spotify at home',{e:2,j:3},'Headphones on, world off.']]],
+['⚽','Five-a-side','Astroturf, bibs, and fierce banter.',[['Join the game',{m:-5,e:-8,h:7,j:8,s:7},'Won 7-6. Legend.'],['Referee',{e:-3,h:2,j:4,s:4},'Nobody agreed with you.'],['Watch from the side',{e:1,j:2,s:2},'Cheerleader energy.']]]
+]);
+P.eve.push(...[
+['🏦','Bills panic','Your bank app buzzes with bad news.',[['Review the budget',{m:20,e:-3,j:-3},'Cut a few subscriptions.'],['Ignore it',{j:1},'Out of sight, out of mind.'],['Sell stuff on Vinted',{m:25,e:-4,j:2},'Tiny profit. Big drama.']]],
+['🎤','Karaoke','The Wetherspoons has a karaoke machine.',[['Belt out a classic',{m:-8,e:-3,j:10,s:6},'Applause! Pints!'],['Request a duet',{m:-8,e:-3,j:8,s:9},'Teamwork. Sparks.'],['Hide in the corner',{m:-5,j:1},'Safe.']]],
+['🍳','Cooking night','Roast, stir-fry or beans? The oven awaits.',[['Make a roast',{m:-14,e:-4,h:3,j:6},'Lovely smells.'],['Quick stir-fry',{m:-6,e:-2,h:4,j:3},'Veg-tastic.'],['Beans on toast again',{m:-1,e:1,h:-1,j:1},'Tried. Tested.']]]
+]);
+P.night.push(['🛌','Sleep routine','It\'s getting late and the day was long.',[['Early night',{e:12,h:2,j:2},'Fully charged.'],['One more episode',{e:4,j:3},'Eyes heavy tomorrow.'],['Late-night chat',{e:1,j:5,s:6},'Heart-to-heart. Worth it.']]]);
+let G;
+const clamp=v=>Math.max(0,Math.min(100,v));
+const pool=()=>{const d=G.t>>2,s=G.t&3;return s==0?P.morn:s==1?(d<5?P.work:P.wknd):s==2?P.eve:P.night};
+const PAY_LINK='https://buy.stripe.com/test_3cI6oJ0k29Gx0C08ZDdUY00';// Paste your Stripe Payment Link here to take real payments
+let BOOST=false;try{BOOST=localStorage.getItem('uk_boost')==='1'}catch(e){}
+const UID=(()=>{try{let u=localStorage.getItem('uk_uid');if(!u){u=crypto.randomUUID?crypto.randomUUID():'p'+Date.now()+Math.random().toString(36).slice(2);localStorage.setItem('uk_uid',u)}return u}catch(e){return 'p'+Date.now()+Math.random().toString(36).slice(2)}})();
+async function verify(back){const m=document.getElementById('msg');m.textContent='Checking your payment...';try{const r=await fetch('/api/claim?uid='+UID,{method:'POST'});const d=await r.json();if(d.ok)return grant(back);m.textContent=d.paid?'That payment has already been used.':'No payment found yet. Wait a few seconds after paying, then try again.'}catch(e){m.textContent="Couldn't reach the payment server."}}
+function shop(back){$.innerHTML=`<h1>💎 Boost Shop</h1><div class="card"><div class="big">💰 Millionaire Boost</div><p>Get £1,000,000 straight into your bank account. Pure fun: your score only counts a capped slice of your money.</p><div class="big">£4.99</div>${PAY_LINK?'':'<p class="sub">🧪 Test mode: no real money is taken.</p>'}<button class="pri" onclick="buy('${back}')">${PAY_LINK?'Pay £4.99 securely':'Try it (free test)'}</button><button onclick="${back}">← Back</button></div>`}
+function buy(back){if(!PAY_LINK)return grant(back);window.open(PAY_LINK+(PAY_LINK.includes('?')?'&':'?')+'client_reference_id='+UID,'_blank');$.innerHTML=`<h1>💳 Complete payment</h1><div class="card"><p>Finish checking out in the new tab, then come back here.</p><p id="msg" class="sub"></p><button class="pri" onclick="verify('${back}')">I've paid, check my payment</button><button onclick="${back}">Cancel</button></div>`}
+function grant(back){const now=G&&G.job;if(now){G.m+=1000000;G.paid=1}else{BOOST=true;try{localStorage.setItem('uk_boost','1')}catch(e){}}$.innerHTML=`<h1>🎉 Boost applied!</h1><div class="card"><p>${now?'£1,000,000 has landed in your bank.':'£1,000,000 will land in your bank when your next life starts.'}</p><button class="pri" onclick="${back}">Continue →</button></div>`}
+const getBest=()=>{try{return +localStorage.getItem('uk_best')||0}catch(e){return 0}};
+function stats(){const d=G.t>>2,s=G.t&3,b=BG[G.bg],B=(l,v)=>`<div>${l} <b>${Math.round(v)}</b><div class="bar"><i style="width:${v}%"></i></div></div>`;return `<div class="days">${DAYS.map((x,i)=>`<span class="${i==d?'on':''}">${x}</span>`).join('')}</div><div class="card"><div class="big">Wk ${G.wk} · ${DAYS[d]} ${G.w.e} · ${SLOTS[s]}</div><div class="stats"><div>💷 <b>£${Math.round(G.m).toLocaleString('en-GB')}</b></div><div>${JOBS[G.job].e} ${G.job} · ${b.e}</div>${B('⚡ Energy',G.e)}${B('😊 Mood',G.j)}${B('💞 Social',G.s)}${B('🩺 Health',G.h)}</div><button style="margin-top:8px;padding:6px;font-size:13px;text-align:center" onclick="shop('scene()')">💎 Boost Shop</button></div>`}
+function home(){$.innerHTML=`<h1>🇬🇧 UK Life Simulator</h1><p class="sub">Survive weeks of British life. Best score: ${getBest()}. Step 1: where did you grow up?</p>`+BG.map((b,i)=>`<button onclick="bgPick(${i})">${b.e} <b>${b.n}</b><br><span class="sub">${b.d}. Start £${b.m}</span></button>`).join('')+`<button onclick="shop('home()')">💎 Boost Shop</button>`}
+function bgPick(i){G={bg:i};$.innerHTML=`<h1>Step 2: your job</h1><p class="sub">${BG[i].e} ${BG[i].n}</p>`+Object.keys(JOBS).map(k=>`<button onclick="begin('${k}')">${JOBS[k].e} <b>${k}</b><br><span class="sub">${JOBS[k].d}. Rent £${JOBS[k].rent+BG[i].rent}/wk</span></button>`).join('')+`<button onclick="home()">← Back</button>`}
+function begin(j){const b=BG[G.bg];G={bg:G.bg,job:j,t:0,wk:1,tea:0,w:rollW(),m:b.m,e:b.en,j:b.j,s:b.s,h:85,rent:JOBS[j].rent+b.rent};if(BOOST){G.m+=1000000;G.paid=1;BOOST=false;try{localStorage.removeItem('uk_boost')}catch(e){}}scene()}
+function scene(){
+if(G.t>=28)return end();
+const p=pool(),e=p[Math.floor(Math.random()*p.length)];G.ev=e;
+$.innerHTML=stats()+`<div class="card"><div class="big">${e[0]} ${e[1]}</div><p>${e[2]}</p>`+e[3].map((o,i)=>`<button onclick="pick(${i})">${o[0]}</button>`).join('')+`</div>`}
+function fx(f){const n={m:'💷',e:'⚡',j:'😊',s:'💞',h:'🩺'};return Object.keys(f).filter(k=>f[k]).map(k=>n[k]+(f[k]>0?'+':'')+f[k]).join('  ')}
+function pick(i){
+const o=G.ev[3][i],f=o[1],d=G.t>>2,s=G.t&3;let extra='';
+G.m+=f.m||0;G.e=clamp(G.e+(f.e||0));G.j=clamp(G.j+(f.j||0));G.s=clamp(G.s+(f.s||0));G.h=clamp(G.h+(f.h||0));if(/brew|tea|cuppa/i.test(o[0]+o[2]))G.tea++;
+if(s==1){G.j=clamp(G.j+G.w.j);G.e=clamp(G.e+G.w.en);G.h=clamp(G.h+G.w.h);extra+=` ${G.w.e} ${G.w.n}: mood ${G.w.j>0?'+':''}${G.w.j}.`}
+if(s==1&&d<5){G.m+=JOBS[G.job].wage;extra+=` Wages +£${JOBS[G.job].wage}.`}
+if(s==3){G.s=clamp(G.s-2);if(G.e<20){G.j=clamp(G.j-8);extra+=' Exhausted: mood −8.'}}
+if(G.e<=10){G.h=clamp(G.h-3);extra+=' Run down: health −3.'}
+if(G.e<=0){G.j=clamp(G.j-6);extra+=' Running on empty: mood −6.'}
+if(s==3&&d==6){G.m-=G.rent+25;extra+=` Rent &amp; bills −£${G.rent+25}.`}
+if(G.s<15){G.j=clamp(G.j-3);extra+=' Feeling lonely: mood −3.'}
+if(G.m<0){G.j=clamp(G.j-4);extra+=' In the red: mood −4.'}
+G.t++;if(s==3)G.w=rollW();if(G.h<=0){G.h=30;G.t=28;extra+=' You collapse and spend the rest of the week in hospital.'}
+$.innerHTML=stats()+`<div class="card"><p><b>${o[2]}</b></p><div class="fx">${fx(f)}</div>${extra?`<div class="fx">${extra}</div>`:''}<button class="pri" onclick="scene()">${G.t>=28?'See how the week went':'Continue →'}</button></div>`}
+function end(){
+const sc=Math.round(G.j+G.s*.6+G.e*.3+G.h*.4+Math.max(-40,Math.min(40,G.m/10)));
+const t=sc>190?'Mastered the British Week 👑':sc>150?'Proper Sorted ☕':sc>110?'Muddled Through 🌧️':'Absolutely Frazzled 🫠';
+let best=getBest();try{if(sc>best){best=sc;localStorage.setItem('uk_best',best)}}catch(e){}
+const a=[];if(G.s>=85)a.push('🦋 Social Butterfly');if(G.m>=400)a.push('🏦 Savvy Saver');if(G.h>=90)a.push('💪 Fit as a Fiddle');if(G.j>=90)a.push('🌈 Chuffed to Bits');if(G.m<0)a.push('💸 Overdrawn but Optimistic');if(G.e<=15)a.push('🧟 Running on Tea');if(G.paid)a.push('💎 Pay-to-Win Millionaire');if(G.tea>=4)a.push('☕ Tea Addict ('+G.tea+' brews)');
+$.innerHTML=`<h1>Week ${G.wk} done!</h1><div class="card"><div class="big">${t}</div><div class="stats"><div>💷 £${Math.round(G.m).toLocaleString('en-GB')}</div><div>${JOBS[G.job].e} ${G.job}</div><div>⚡ Energy ${Math.round(G.e)}</div><div>😊 Mood ${Math.round(G.j)}</div><div>💞 Social ${Math.round(G.s)}</div><div>🩺 Health ${Math.round(G.h)}</div></div><p class="sub">Score ${sc} · Best ${best}</p>${a.length?`<p><b>Badges</b><br>${a.join('<br>')}</p>`:''}<button class="pri" onclick="nextWeek()">Next week, same life →</button><button onclick="shop('end()')">💎 Boost Shop</button><button onclick="home()">Start a new life</button></div>`}
+function nextWeek(){G.t=0;G.wk++;G.tea=0;G.e=clamp(G.e+15);G.w=rollW();scene()}
+home();
+</script>
+</body>
+</html>
